@@ -10,7 +10,7 @@ import warnings
 
 # Import custom modules
 from config import Config
-from data_preprocessing import create_preprocessor, DataPreprocessor
+from data_preprocessing import DataPreprocessor
 from inference_pipeline import create_inference_pipeline
 
 warnings.filterwarnings('ignore')
@@ -25,7 +25,8 @@ def inference_pipeline(
     test_path: str = None,
     model_dir: str = None,
     output_path: str = None,
-    config: Config = None
+    config: Config = None,
+    preprocessor_path: str = None
 ):
     """
     Complete inference pipeline for making predictions
@@ -65,32 +66,22 @@ def inference_pipeline(
     logger.info(f"Test data loaded: {test_df.shape}")
     
     # Load the fitted preprocessor artifact created during training
-    preproc_path = os.path.join(config.paths.MODEL_DIR, 'preprocessor.joblib')
-
-    if os.path.exists(preproc_path):
-        preprocessor = DataPreprocessor.load(preproc_path)
-        logger.info(f"Loaded preprocessor from {preproc_path}")
-        # Transform for inference (drops ID column later in create_submission)
-        X_test = preprocessor.transform_for_inference(test_df)
-        logger.info(f"Test features prepared: {X_test.shape}")
+    if preprocessor_path:
+        preproc_path = preprocessor_path
     else:
-        # Fallback: attempt to use an unfitted preprocessor (best-effort)
-        logger.warning(
+        preproc_path = os.path.join(config.paths.MODEL_DIR, 'preprocessor.joblib')
+
+    if not os.path.exists(preproc_path):
+        raise FileNotFoundError(
             f"Preprocessor artifact not found at {preproc_path}. "
-            "Attempting best-effort transformations using default preprocessor. "
-            "This may produce different categories than training."
+            "Run the training pipeline to create and save the fitted preprocessor, "
+            "or pass a valid `preprocessor_path` to this function."
         )
-        preprocessor = create_preprocessor(config)
-        # Apply legacy transformations if those functions exist
-        test_df_processed = test_df.copy()
-        try:
-            test_df_processed, _ = preprocessor.convert_numerical_to_categorical(test_df_processed)
-            test_df_processed, _ = preprocessor.apply_log_transformation(test_df_processed)
-            X_test = test_df_processed.drop(columns=[config.model.ID_COL])
-            logger.info(f"Test features prepared (fallback): {X_test.shape}")
-        except Exception as e:
-            logger.error(f"Failed to preprocess test data in fallback mode: {e}")
-            raise
+
+    preprocessor = DataPreprocessor.load(preproc_path)
+    logger.info(f"Loaded preprocessor from {preproc_path}")
+    X_test = preprocessor.transform_for_inference(test_df)
+    logger.info(f"Test features prepared: {X_test.shape}")
     
     # ========================================
     # STEP 2: LOAD MODELS AND MAKE PREDICTIONS

@@ -43,14 +43,12 @@ class DataPreprocessor:
     def __init__(self, config):
         self.config = config
         self.fitted = False
-        # learned state
         self.category_map: Dict[str, List] = {}
         self.cat_features_indices: List[int] = []
         self.feature_names: List[str] = []
         self._numerical_to_boolean = getattr(self.config.features, 'NUMERICAL_TO_BOOLEAN', [])
         self._skewed_cols = getattr(self.config.features, 'SKEWED_TO_GAUSS', [])
 
-    # ---------- I/O helpers ----------
     def load_data(self, path: str) -> pd.DataFrame:
         logger.info(f"Loading data from {path}")
         return pd.read_csv(path)
@@ -70,7 +68,6 @@ class DataPreprocessor:
             raise TypeError("Loaded object is not a DataPreprocessor instance")
         return obj
 
-    # ---------- Fit / Transform API ----------
     def fit(self, train_df: pd.DataFrame) -> None:
         """Fit the preprocessor on training dataframe.
 
@@ -78,32 +75,32 @@ class DataPreprocessor:
         - categorical value lists per categorical column
         - feature names and categorical indices
         """
-        # Work on a copy
         df = train_df.copy()
 
-        # Convert numerical-to-boolean columns to categorical dtype
         if self._numerical_to_boolean:
             for col in self._numerical_to_boolean:
                 if col in df.columns:
                     df[col] = df[col].astype('category')
 
-        # Apply log transform to skewed columns (train only)
         if self._skewed_cols:
             for col in self._skewed_cols:
                 if col in df.columns:
-                    # Guard against negative values; clip at -1e-6 then log1p
                     df[col] = np.log1p(np.clip(df[col].astype(float), a_min=0.0, a_max=None))
 
-        # Identify object columns and record their categories from training set
+        MISSING_SENTINEL = "__MISSING__"
         object_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
         for col in object_cols:
-            # Record unique training categories (preserve order)
-            cats = pd.Series(df[col].astype('str').fillna('')).unique().tolist()
+            series_for_cats = df[col].astype('object').fillna(MISSING_SENTINEL).astype('str')
+            cats = pd.Series(series_for_cats).unique().tolist()
             self.category_map[col] = cats
-            # Apply categorical dtype with learned categories
-            df[col] = df[col].astype(pd.CategoricalDtype(categories=cats, ordered=False))
+            df[col] = (
+                df[col]
+                .astype('object')
+                .fillna(MISSING_SENTINEL)
+                .astype('str')
+                .astype(pd.CategoricalDtype(categories=cats, ordered=False))
+            )
 
-        # Build feature matrix
         if self.config.model.TARGET_COL not in df.columns:
             raise KeyError(f"Target column {self.config.model.TARGET_COL} not found in training data")
 
@@ -117,7 +114,6 @@ class DataPreprocessor:
         logger.info(f"Fitted preprocessor on data shape: {df.shape}")
         logger.info(f"Found {len(self.category_map)} categorical columns")
 
-        # keep y if needed by user; don't store train data
         return None
 
     def fit_transform(self, train_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series]:
@@ -126,7 +122,6 @@ class DataPreprocessor:
 
         df = train_df.copy()
 
-        # Same operations as in fit
         if self._numerical_to_boolean:
             for col in self._numerical_to_boolean:
                 if col in df.columns:
@@ -137,15 +132,20 @@ class DataPreprocessor:
                 if col in df.columns:
                     df[col] = np.log1p(np.clip(df[col].astype(float), a_min=0.0, a_max=None))
 
-        # Apply categorical dtypes using learned categories
+        MISSING_SENTINEL = "__MISSING__"
         for col, cats in self.category_map.items():
             if col in df.columns:
-                df[col] = df[col].astype(pd.CategoricalDtype(categories=cats, ordered=False))
+                df[col] = (
+                    df[col]
+                    .astype('object')
+                    .fillna(MISSING_SENTINEL)
+                    .astype('str')
+                    .astype(pd.CategoricalDtype(categories=cats, ordered=False))
+                )
 
         X = df.drop(columns=[self.config.model.TARGET_COL, self.config.model.ID_COL])
         y = df[self.config.model.TARGET_COL]
 
-        # update cat indices in case types changed
         self.feature_names = X.columns.tolist()
         self.cat_features_indices = [i for i, c in enumerate(self.feature_names) if X[c].dtype.name == 'category']
 
@@ -161,31 +161,33 @@ class DataPreprocessor:
 
         out = df.copy()
 
-        # Convert numerical-to-boolean columns to categorical dtype
         if self._numerical_to_boolean:
             for col in self._numerical_to_boolean:
                 if col in out.columns:
                     out[col] = out[col].astype('category')
 
-        # Apply log transform using same columns
         if self._skewed_cols:
             for col in self._skewed_cols:
                 if col in out.columns:
                     out[col] = np.log1p(np.clip(out[col].astype(float), a_min=0.0, a_max=None))
 
-        # Apply categorical dtypes using categories learned from training
+        MISSING_SENTINEL = "__MISSING__"
         for col, cats in self.category_map.items():
             if col in out.columns:
-                out[col] = out[col].astype(pd.CategoricalDtype(categories=cats, ordered=False))
+                out[col] = (
+                    out[col]
+                    .astype('object')
+                    .fillna(MISSING_SENTINEL)
+                    .astype('str')
+                    .astype(pd.CategoricalDtype(categories=cats, ordered=False))
+                )
 
-        # Ensure we return the same feature columns and order the same as training
         missing = [c for c in self.feature_names if c not in out.columns]
         if missing:
             raise KeyError(f"Missing expected feature columns: {missing}")
 
         out = out[self.feature_names]
 
-        # update cat_features_indices just in case
         self.cat_features_indices = [i for i, c in enumerate(self.feature_names) if out[c].dtype.name == 'category']
 
         return out
@@ -193,7 +195,6 @@ class DataPreprocessor:
     def transform_for_inference(self, test_df: pd.DataFrame) -> pd.DataFrame:
         """Transform incoming test/inference data and drop ID column before returning X_test."""
         out = self.transform(test_df)
-        # Drop ID column if present in original test_df
         if self.config.model.ID_COL in out.columns:
             out = out.drop(columns=[self.config.model.ID_COL])
         return out
