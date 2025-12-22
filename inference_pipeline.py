@@ -10,6 +10,8 @@ import logging
 import pickle
 import os
 
+from data_preprocessing import DataPreprocessor
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -170,9 +172,19 @@ class InferencePipeline:
             self.load_models(model_dir)
         
         # Preprocess data if preprocessor provided
+        # Preprocessor can be:
+        # - an instance of DataPreprocessor (already fitted),
+        # - a path to a saved preprocessor artifact, or
+        # - None (assume test_df already preprocessed)
         if preprocessor:
-            self.preprocessor = preprocessor
-            _, _, X_test, _ = preprocessor.prepare_features(None, test_df)
+            if isinstance(preprocessor, str):
+                # load saved artifact
+                self.preprocessor = DataPreprocessor.load(preprocessor)
+            else:
+                self.preprocessor = preprocessor
+
+            # Use inference transform (does not peek at labels)
+            X_test = self.preprocessor.transform_for_inference(test_df)
         else:
             # Assume test_df is already preprocessed
             X_test = test_df.drop(columns=[self.config.model.ID_COL])

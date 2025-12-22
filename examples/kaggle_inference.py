@@ -35,6 +35,14 @@ config.paths.MODEL_DIR = "/kaggle/input/your-model-dataset/models/"
 config.paths.OUTPUT_DIR = "/kaggle/working/"
 config.paths.SUBMISSION_FILE = "submission.csv"
 
+# Path to the fitted preprocessor artifact (saved during training)
+preproc_path = f"{config.paths.MODEL_DIR}preprocessor.joblib"
+
+import os
+if not os.path.exists(preproc_path):
+    print("WARNING: Preprocessor artifact not found at:", preproc_path)
+    print("Make sure to include the fitted preprocessor in your model dataset or copy it to the model directory.")
+
 # ============================================
 # RUN INFERENCE PIPELINE
 # ============================================
@@ -67,6 +75,7 @@ print(submission[config.model.TARGET_COL].describe())
 
 print("\n" + "=" * 80)
 print(f"✓ Submission saved to: {config.paths.OUTPUT_DIR}{config.paths.SUBMISSION_FILE}")
+print(f"✓ Preprocessor artifact used (expected): {preproc_path}")
 print("=" * 80)
 
 # ============================================

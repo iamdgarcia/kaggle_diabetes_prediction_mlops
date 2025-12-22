@@ -83,14 +83,17 @@ fi_df = fi_df.sort_values('importance', ascending=False).head(10)
 print(fi_df.to_string(index=False))
 
 print("\n" + "=" * 80)
-print("OUTPUT FILES:")
+print("OUTPUT ARTIFACTS:")
 print("=" * 80)
-print(f"✓ Submission file: {config.paths.OUTPUT_DIR}{config.paths.SUBMISSION_FILE}")
 print(f"✓ Models saved to: {config.paths.MODEL_DIR}")
+print(f"✓ Fitted preprocessor artifact: {config.paths.MODEL_DIR}preprocessor.joblib")
 print(f"✓ Visualizations saved to: {config.paths.OUTPUT_DIR}")
 print("  - model_comparison.png")
 print("  - feature_importance_best_model.png")
 print("  - shap_summary_best_model.png")
+print("\nNote: A submission CSV is not created by the training script.\n" \
+    "To generate a submission file, run the standalone inference script `predict_pipeline.py` " \
+    "which will load the saved preprocessor and models and write the submission.")
 
 # ============================================
 # OPTIONAL: PARAMETER TUNING TIPS

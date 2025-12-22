@@ -12,6 +12,7 @@ import warnings
 # Import custom modules
 from config import Config
 from data_preprocessing import create_preprocessor
+import os
 from model_training import create_trainer
 from model_evaluation import create_evaluator
 from inference_pipeline import save_models
@@ -65,13 +66,17 @@ def training_pipeline(
     logger.info("-" * 80)
     
     preprocessor = create_preprocessor(config)
-    X_train, y_train, X_test, cat_features_indices = preprocessor.preprocess_pipeline(
-        train_path=train_path,
-        test_path=test_path
-    )
+
+    # Load training data and fit preprocessor (do not use test data here)
+    train_df = preprocessor.load_data(train_path)
+    X_train, y_train = preprocessor.fit_transform(train_df)
+    cat_features_indices = preprocessor.cat_features_indices
+
+    # Save the fitted preprocessor artifact for later inference
+    preproc_path = os.path.join(config.paths.MODEL_DIR, 'preprocessor.joblib')
+    preprocessor.save(preproc_path)
     
     logger.info(f"Training set shape: {X_train.shape}")
-    logger.info(f"Test set shape: {X_test.shape if X_test is not None else 'N/A'}")
     logger.info(f"Target distribution:\n{y_train.value_counts(normalize=True)}")
     
     # ========================================
@@ -89,8 +94,9 @@ def training_pipeline(
     logger.info("\nSTEP 3: Training Final Model with K-Fold CV")
     logger.info("-" * 80)
     
+    # Train final models (no test data passed)
     predictions, fold_models, feature_importances = trainer.train_final_model(
-        X_train, y_train, X_test
+        X_train, y_train
     )
     
     # Save trained models
@@ -130,22 +136,9 @@ def training_pipeline(
         model_name=trainer.best_model_name
     )
     
-    # ========================================
-    # STEP 5: CREATE SUBMISSION
-    # ========================================
-    if X_test is not None and predictions is not None:
-        logger.info("\nSTEP 5: Creating Submission File")
-        logger.info("-" * 80)
-        
-        test_df = pd.read_csv(test_path)
-        submission = pd.DataFrame({
-            config.model.ID_COL: test_df[config.model.ID_COL],
-            config.model.TARGET_COL: predictions
-        })
-        
-        submission_path = f"{config.paths.OUTPUT_DIR}{config.paths.SUBMISSION_FILE}"
-        submission.to_csv(submission_path, index=False)
-        logger.info(f"Submission saved to {submission_path}")
+    # NOTE: Creating a submission file is part of the inference step and is
+    # handled by `inference_pipeline.py`. The training pipeline saves models
+    # and the fitted preprocessor for later use in inference.
     
     # ========================================
     # SUMMARY

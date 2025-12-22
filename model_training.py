@@ -232,25 +232,28 @@ class ModelTrainer:
         return self.study_results
     
     def train_final_model(
-        self, 
-        X: pd.DataFrame, 
-        y: pd.Series, 
-        X_test: Optional[pd.DataFrame] = None,
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
         model_name: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None
-    ) -> Tuple[np.ndarray, List, np.ndarray]:
+    ) -> Tuple[Optional[np.ndarray], List, np.ndarray]:
         """
-        Train final model using K-Fold cross-validation
-        
+        Train final model using K-Fold cross-validation.
+
+        NOTE: This method no longer accepts or predicts on test data. Training
+        and inference are separated in the MLOps flow — inference should be
+        performed with the `InferencePipeline` using a saved preprocessor and
+        the trained models.
+
         Args:
             X: Training features
             y: Training target
-            X_test: Test features (optional)
             model_name: Model to train (uses best if not specified)
             params: Model parameters (uses best if not specified)
-            
+
         Returns:
-            Tuple of (predictions, fold_models, feature_importances)
+            Tuple of (predictions (always None), fold_models, feature_importances)
         """
         # Use best model if not specified
         if model_name is None:
@@ -333,10 +336,8 @@ class ModelTrainer:
             # Store model
             fold_models.append(model)
             
-            # Predict on test set if provided
-            if X_test is not None:
-                probs = model.predict_proba(X_test)[:, 1]
-                fold_preds.append(probs)
+            # NOTE: Do not predict on any external test set here.
+            # Inference is handled separately by the inference pipeline.
             
             # Accumulate feature importances
             try:
@@ -344,10 +345,8 @@ class ModelTrainer:
             except AttributeError:
                 pass
         
-        # Average predictions across folds
+        # We intentionally do not produce test predictions here.
         avg_preds = None
-        if X_test is not None:
-            avg_preds = np.mean(fold_preds, axis=0)
         
         logger.info("Final model training completed")
         
