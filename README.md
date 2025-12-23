@@ -346,3 +346,10 @@ This project is provided as-is for educational and competition purposes.
 - SHAP for model interpretability
 - XGBoost, LightGBM, CatBoost teams
 - Kaggle for hosting the competition
+
+
+[Databricks MLOps Production Checklist — productionize notebooks into production-ready systems. Pay $0 or name a fair price.][^db_checklist]
+
+*Daniel García* · ❤️ Sponsored by The Community
+
+[^db_checklist]: https://iamdgarcia.gumroad.com/l/databricks-mlops-blueprint — Enter $0 to get it for free, or name a fair price.
